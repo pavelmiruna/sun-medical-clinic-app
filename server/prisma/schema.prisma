@@ -1,0 +1,472 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  ASSISTANT
+  PATIENT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(PATIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patientProfile  PatientProfile?
+  patientAccesses PatientAccess[]
+
+  doctorAppointments  Appointment[]    @relation("DoctorAppointments")
+  createdAppointments Appointment[]    @relation("CreatedAppointments")
+  doctorSchedules     DoctorSchedule[]
+  consultations       Consultation[]
+  prescriptions Prescription[]
+  doctorMedicalDocuments  MedicalDocument[] @relation("DoctorMedicalDocuments")
+  createdMedicalDocuments MedicalDocument[] @relation("CreatedMedicalDocuments")
+  referrals Referral[]
+  announcements Announcement[]
+  createdVaccinationRecords VaccinationRecord[] @relation("CreatedVaccinationRecords")
+  doctorProfile DoctorProfile?
+  createdPatientProfiles   PatientProfile[] @relation("CreatedPatientProfiles")
+  assignedPatientProfiles  PatientProfile[] @relation("AssignedDoctorPatients")
+
+  // Relație asistent ↔ doctor
+  assignedDoctorId String?
+  assignedDoctor   User?   @relation("AssistantDoctor", fields: [assignedDoctorId], references: [id], onDelete: SetNull)
+  assistants       User[]  @relation("AssistantDoctor")
+
+  @@index([role])
+  @@index([assignedDoctorId])
+}
+
+model PatientProfile {
+  id String @id @default(cuid())
+
+  // poate fi null pentru pacienți fără cont
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  firstName   String
+  lastName    String
+  phone       String? // pentru pacienți fără email, telefonul e principal
+  dateOfBirth DateTime?
+  isMinor     Boolean   @default(false)
+  cnp String?
+  sex String?
+
+  accesses      PatientAccess[]
+  appointments  Appointment[]
+  consultations Consultation[]
+  prescriptions Prescription[]
+  medicalDocuments MedicalDocument[]
+  referrals Referral[] 
+  vaccinationRecords VaccinationRecord[]
+
+  // Claim fields (pentru profile create fără cont)
+  claimCodeHash      String?   @unique
+  claimCodeExpiresAt DateTime?
+  claimedAt          DateTime?
+
+  // Doctorul/asistentul care a creat profilul
+  createdByUserId String?
+  createdByUser   User?   @relation("CreatedPatientProfiles", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  // Doctorul căruia îi este atribuit pacientul (setat de asistent la creare)
+  assignedDoctorId String?
+  assignedDoctor   User?  @relation("AssignedDoctorPatients", fields: [assignedDoctorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastName, firstName])
+  @@index([phone])
+  @@index([createdByUserId])
+  @@index([assignedDoctorId])
+}
+
+enum PatientAccessRole {
+  OWNER
+  GUARDIAN
+  PROXY
+}
+
+model PatientAccess {
+  id String @id @default(cuid())
+
+  userId    String
+  patientId String
+  role      PatientAccessRole @default(GUARDIAN)
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, patientId])
+  @@index([patientId])
+  @@index([userId])
+}
+
+//Programari
+
+enum AppointmentStatus {
+  SCHEDULED
+  CANCELED
+  COMPLETED
+  NO_SHOW
+}
+
+enum AppointmentReason {
+  ROUTINE_CHECK
+  PRESCRIPTION_RENEWAL
+  SICK_VISIT
+  LAB_RESULTS
+  VACCINATION
+  ADMINISTRATIVE
+}
+
+model Appointment {
+  id String @id @default(cuid())
+
+  patientId       String
+  doctorId        String
+  createdByUserId String
+
+  scheduledAt       DateTime
+  reason            AppointmentReason?
+  status            AppointmentStatus  @default(SCHEDULED)
+  notes             String?
+  reminderSentAt    DateTime?
+
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        User           @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  createdByUser User           @relation("CreatedAppointments", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consultation Consultation?
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([scheduledAt])
+}
+
+model DoctorSchedule {
+  id          String @id @default(cuid())
+  doctorId    String
+  weekday     Int
+  startTime   String
+  endTime     String
+  slotMinutes Int    @default(30)
+
+  doctor User @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, weekday, startTime, endTime])
+  @@index([doctorId])
+  @@index([weekday])
+}
+
+model Consultation {
+  id                String   @id @default(cuid())
+  appointmentId     String   @unique
+  doctorId          String
+  patientId         String
+
+  chiefComplaint    String?
+  diagnosis         String?
+  treatment         String?
+  objectiveFindings String?
+  notes             String?
+  recommendations   String?
+  plan              String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  appointment       Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctor            User           @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient           PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescriptions Prescription[]
+  referrals Referral[]
+  medicalDocuments MedicalDocument[]
+
+
+  @@index([doctorId])
+  @@index([patientId])
+  @@index([appointmentId])
+}
+
+model Prescription {
+  id                  String   @id @default(cuid())
+  consultationId      String
+  doctorId            String
+  patientId           String
+
+  serialNumber        Int?
+  generalInstructions String?
+  issuedAt            DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  consultation        Consultation   @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctor              User           @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient             PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  items               PrescriptionItem[]
+  medicalDocuments MedicalDocument[]
+
+
+  @@index([consultationId])
+  @@index([doctorId])
+  @@index([patientId])
+}
+
+model PrescriptionItem {
+  id               String   @id @default(cuid())
+  prescriptionId   String
+
+  medicationName   String
+  form             String?
+  concentration    String?
+  dosage           String?
+  frequency        String?
+  duration         String?
+  route            String?
+  instructions     String?
+  quantity         String?
+  orderIndex       Int      @default(0)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  prescription     Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+}
+
+enum ReferralPriority {
+  ROUTINE
+  URGENT
+}
+
+model Referral {
+  id               String   @id @default(cuid())
+  consultationId   String
+  doctorId         String
+  patientId        String
+
+  serialNumber     Int?
+  specialty        String
+  reason           String?
+  clinicalSummary  String?
+  destinationUnit  String?
+  notes            String?
+  priority         ReferralPriority @default(ROUTINE)
+
+  issuedAt         DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  consultation     Consultation   @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  doctor           User           @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient          PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  medicalDocuments MedicalDocument[]
+
+  @@index([consultationId])
+  @@index([doctorId])
+  @@index([patientId])
+}
+
+enum MedicalDocumentType {
+  PRESCRIPTION
+  REFERRAL
+  MEDICAL_LETTER
+  OTHER
+}
+
+enum MedicalDocumentStatus {
+  DRAFT
+  FINALIZED
+  CANCELED
+}
+
+model MedicalDocument {
+  id               String                @id @default(cuid())
+  type             MedicalDocumentType
+  status           MedicalDocumentStatus @default(DRAFT)
+
+  consultationId   String?
+  prescriptionId   String?
+  referralId       String?
+
+  doctorId         String
+  patientId        String
+  createdByUserId  String
+
+  title            String?
+  templateKey      String?
+  version          Int                   @default(1)
+
+  sourceSnapshot   Json?
+  generatedContent Json?
+  overrides        Json?
+  finalContent     Json?
+
+  pdfUrl           String?
+  pdfGeneratedAt   DateTime?
+  issuedAt         DateTime?
+  finalizedAt      DateTime?
+
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  consultation     Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  prescription     Prescription? @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  referral   Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+
+  patient          PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor           User           @relation("DoctorMedicalDocuments", fields: [doctorId], references: [id], onDelete: Cascade)
+  createdByUser    User           @relation("CreatedMedicalDocuments", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  
+
+  @@index([type])
+  @@index([status])
+  @@index([doctorId])
+  @@index([patientId])
+  @@index([consultationId])
+  @@index([prescriptionId])
+  @@index([referralId])
+}
+
+enum AnnouncementAudience {
+  ALL
+  DOCTORS
+  ASSISTANTS
+  PATIENTS
+  STAFF
+  MY_PATIENTS    // Pacienții proprii ai doctorului creator
+  MY_ASSISTANTS  // Asistenții proprii ai doctorului creator
+}
+
+enum AnnouncementStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Announcement {
+  id              String               @id @default(cuid())
+  title           String
+  content         String
+  audience        AnnouncementAudience @default(ALL)
+  status          AnnouncementStatus   @default(ACTIVE)
+
+  startsAt        DateTime?
+  endsAt          DateTime?
+
+  createdByUserId String
+  createdByUser   User                 @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([audience])
+  @@index([status])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([createdByUserId])
+}
+
+enum VaccinationStatus {
+  COMPLETED
+  SCHEDULED
+  CANCELED
+}
+
+model VaccinationRecord {
+  id               String            @id @default(cuid())
+  patientId        String
+  createdByUserId  String
+
+  vaccineName      String
+  doseLabel        String?
+  status           VaccinationStatus @default(COMPLETED)
+
+  administeredAt   DateTime?
+  scheduledAt      DateTime?
+
+  manufacturer     String?
+  batchNumber      String?
+  site             String?
+  route            String?
+  notes            String?
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  patient          PatientProfile    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdByUser    User              @relation("CreatedVaccinationRecords", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([createdByUserId])
+  @@index([status])
+  @@index([administeredAt])
+  @@index([scheduledAt])
+}
+
+model Clinic {
+  id           String  @id @default(cuid())
+  name         String
+  address      String?
+  phone        String?
+  email        String?
+  serialPrefix String? // seria implicită pentru rețete (ex: "RM")
+
+  doctorProfiles DoctorProfile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DoctorProfile {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName      String?
+  lastName       String?
+  specialization String?
+  parafaCode     String? // ex: F07066
+  signatureUrl   String? // URL imagine semnătură
+  parafaImageUrl String? // URL imagine parafă
+
+  clinicId String?
+  clinic   Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([clinicId])
+}
+
+model DocumentCounter {
+  type  String @id
+  value Int    @default(0)
+}
