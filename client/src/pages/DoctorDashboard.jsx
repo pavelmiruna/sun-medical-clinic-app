@@ -5,6 +5,7 @@ import PatientsTab from "./PatientsTab";
 import ConsultationsTab from "./ConsultationsTab";
 import ScheduleTab from "./ScheduleTab";
 import AnnouncementsTab from "./AnnouncementsTab";
+import AnnouncementsBanner from "./AnnouncementsBanner";
 import CreateAppointmentModal from "./CreateAppointmentModal";
 import ConsultationModal from "./ConsultationModal";
 import SettingsPage from "./SettingsPage";
@@ -281,6 +282,7 @@ function StatCard({ label, value, icon, color, sub }) {
 // ─── Tab: Dashboard Home ──────────────────────────────────────
 function DashboardHome({ appointments, consultations, loading, onCreateAppt }) {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const todayAppointments = appointments?.filter((a) => isToday(a.scheduledAt) && a.status !== "CANCELED") ?? [];
   const upcomingAppointments = appointments?.filter((a) => isFuture(a.scheduledAt) && !isToday(a.scheduledAt) && a.status !== "CANCELED").slice(0, 5) ?? [];
   const totalScheduled = appointments?.filter((a) => a.status === "SCHEDULED").length ?? 0;
@@ -291,6 +293,7 @@ function DashboardHome({ appointments, consultations, loading, onCreateAppt }) {
 
   return (
     <div className="space-y-8">
+      <AnnouncementsBanner token={token} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">{greeting}, Doctore 👋</h1>
@@ -575,7 +578,7 @@ function AppointmentsTab({ appointments, loading, onCreateAppt, onRefresh }) {
         <ConsultationModal
           appointment={consultationAppt}
           onClose={() => setConsultationAppt(null)}
-          onSaved={() => { setConsultationAppt(null); onRefresh?.(); }}
+          onSaved={() => onRefresh?.()}
         />
       )}
     </div>

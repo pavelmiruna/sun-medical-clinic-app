@@ -102,7 +102,7 @@ export async function createAppointment({
 }
 
 async function sendAppointmentConfirmationIfPossible(appointment) {
-  const [patientProfile, doctor] = await Promise.all([
+  const [patientProfile, doctor, accesses] = await Promise.all([
     prisma.patientProfile.findUnique({
       where: { id: appointment.patientId },
       select: {
@@ -117,22 +117,32 @@ async function sendAppointmentConfirmationIfPossible(appointment) {
         doctorProfile: { select: { firstName: true, lastName: true } },
       },
     }),
+    prisma.patientAccess.findMany({
+      where: { patientId: appointment.patientId },
+      select: { user: { select: { email: true } } },
+    }),
   ]);
 
-  const email = patientProfile?.user?.email;
-  if (!email) return;
+  const emails = new Set();
+  if (patientProfile?.user?.email) emails.add(patientProfile.user.email);
+  for (const access of accesses) {
+    if (access.user?.email) emails.add(access.user.email);
+  }
+  if (emails.size === 0) return;
 
   const doctorName = doctor?.doctorProfile?.firstName
     ? `Dr. ${doctor.doctorProfile.firstName} ${doctor.doctorProfile.lastName}`
     : doctor?.email ?? "Medicul dumneavoastră";
 
-  await sendAppointmentConfirmation({
-    to: email,
-    patientName: `${patientProfile.firstName} ${patientProfile.lastName}`,
-    doctorName,
-    scheduledAt: appointment.scheduledAt,
-    reason: appointment.reason,
-  });
+  await Promise.all([...emails].map((to) =>
+    sendAppointmentConfirmation({
+      to,
+      patientName: `${patientProfile.firstName} ${patientProfile.lastName}`,
+      doctorName,
+      scheduledAt: appointment.scheduledAt,
+      reason: appointment.reason,
+    })
+  ));
 }
 
 export async function getMyAppointments({ requesterId, requesterRole }) {

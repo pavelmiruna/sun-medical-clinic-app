@@ -21,6 +21,7 @@ export async function sendPendingReminders() {
         select: {
           firstName: true, lastName: true,
           user: { select: { email: true } },
+          accesses: { select: { user: { select: { email: true } } } },
         },
       },
       doctor: {
@@ -36,21 +37,27 @@ export async function sendPendingReminders() {
 
   let sent = 0;
   for (const appt of appointments) {
-    const email = appt.patient?.user?.email;
-    if (!email) continue;
+    const emails = new Set();
+    if (appt.patient?.user?.email) emails.add(appt.patient.user.email);
+    for (const access of appt.patient?.accesses ?? []) {
+      if (access.user?.email) emails.add(access.user.email);
+    }
+    if (emails.size === 0) continue;
 
     const doctorName = appt.doctor?.doctorProfile?.firstName
       ? `Dr. ${appt.doctor.doctorProfile.firstName} ${appt.doctor.doctorProfile.lastName}`
       : appt.doctor?.email ?? "Medicul dumneavoastră";
 
     try {
-      await sendAppointmentReminder({
-        to: email,
-        patientName: `${appt.patient.firstName} ${appt.patient.lastName}`,
-        doctorName,
-        scheduledAt: appt.scheduledAt,
-        reason: appt.reason,
-      });
+      await Promise.all([...emails].map((to) =>
+        sendAppointmentReminder({
+          to,
+          patientName: `${appt.patient.firstName} ${appt.patient.lastName}`,
+          doctorName,
+          scheduledAt: appt.scheduledAt,
+          reason: appt.reason,
+        })
+      ));
 
       await prisma.appointment.update({
         where: { id: appt.id },

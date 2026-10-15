@@ -199,6 +199,11 @@ export async function getDoctorAvailableSlots(doctorId, date) {
 
   const occupiedTimes = new Set(appointments.map((a) => timeFromDate(a.scheduledAt)));
 
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const isToday = date === todayStr;
+  const nowMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0;
+
   const available = [];
 
   for (const schedule of schedules) {
@@ -209,12 +214,12 @@ export async function getDoctorAvailableSlots(doctorId, date) {
     );
 
     for (const time of slots) {
-      if (!occupiedTimes.has(time)) {
-        available.push({
-          time,
-          scheduledAt: new Date(`${date}T${time}:00`),
-        });
-      }
+      if (occupiedTimes.has(time)) continue;
+      if (isToday && parseTimeToMinutes(time) <= nowMinutes) continue;
+      available.push({
+        time,
+        scheduledAt: new Date(`${date}T${time}:00`),
+      });
     }
   }
 

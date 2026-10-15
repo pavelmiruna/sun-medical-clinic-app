@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import PatientsTab from "./PatientsTab";
 import AnnouncementsTab from "./AnnouncementsTab";
+import AnnouncementsBanner from "./AnnouncementsBanner";
 import CreateAppointmentModal from "./CreateAppointmentModal";
 import SettingsPage from "./SettingsPage";
 import ConsultationModal from "./ConsultationModal";
@@ -204,6 +205,7 @@ function StatCard({ label, value, icon, color, sub }) {
 // ─── Dashboard Home ───────────────────────────────────────────
 function DashboardHome({ appointments, loading, onCreateAppt }) {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const todayAppointments = appointments?.filter((a) => isToday(a.scheduledAt) && a.status !== "CANCELED") ?? [];
   const scheduled = appointments?.filter((a) => a.status === "SCHEDULED").length ?? 0;
   const noShow = appointments?.filter((a) => a.status === "NO_SHOW").length ?? 0;
@@ -212,6 +214,7 @@ function DashboardHome({ appointments, loading, onCreateAppt }) {
 
   return (
     <div className="space-y-8">
+      <AnnouncementsBanner token={token} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">{greeting}! 👋</h1>
@@ -466,7 +469,7 @@ function AppointmentsTab({ appointments, loading, onCreateAppt, onRefresh }) {
       <ConsultationModal
         appointment={consultationAppt}
         onClose={() => setConsultationAppt(null)}
-        onSaved={() => { setConsultationAppt(null); onRefresh?.(); }}
+        onSaved={() => onRefresh?.()}
       />
     )}
   </>

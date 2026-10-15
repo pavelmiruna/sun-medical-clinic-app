@@ -297,8 +297,6 @@ model Referral {
 enum MedicalDocumentType {
   PRESCRIPTION
   REFERRAL
-  MEDICAL_LETTER
-  OTHER
 }
 
 enum MedicalDocumentStatus {

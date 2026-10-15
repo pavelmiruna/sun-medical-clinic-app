@@ -270,7 +270,7 @@ function ConsultationTab({ appointment, token, onSaved }) {
         {saved && !loading && (
           <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-3 rounded-xl mb-4">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-            Consultația a fost salvată. Poți trece la rețetă sau trimitere.
+            Consultația a fost salvată.
           </div>
         )}
         <button onClick={handleSubmit} disabled={loading}
@@ -718,6 +718,7 @@ export default function ConsultationModal({ appointment, onClose, onSaved }) {
   const handleConsultationSaved = (data) => {
     setSavedConsultation(data);
     onSaved();
+    setActiveTab("prescription");
   };
 
   return (

@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "../db/prisma.js";
-import { generateSlots, getWeekdayFromDateString, timeFromDate } from "../utils/time.js";
+import { generateSlots, getWeekdayFromDateString, timeFromDate, parseTimeToMinutes } from "../utils/time.js";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
